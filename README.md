@@ -13,6 +13,8 @@ source ~/.bashrc
 ```
 Then, you can import and utilize the modules in your Python scripts.
 
+> **Note:** only standard python modules are used, so for the time being, adding to pip is not planned, and conflict with other libraries is impossible
+
 ## Features
 
 ### Function Status Decorator
