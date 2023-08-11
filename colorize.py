@@ -35,6 +35,8 @@ class Colorize:
     RESET_COLOR = "\033[0m"
 
     COLORS = {
+    "white": "\033[37m",
+    "gray": "\033[90m",
     "black": "\033[30m",
     "red": "\033[31m",
     "green": "\033[32m",
@@ -42,34 +44,32 @@ class Colorize:
     "blue": "\033[34m",
     "magenta": "\033[35m",
     "cyan": "\033[36m",
-    "white": "\033[37m",
-    "bright_black": "\033[90m",
+    "bright_white": "\033[97m",
     "bright_red": "\033[91m",
     "bright_green": "\033[92m",
     "bright_yellow": "\033[93m",
     "bright_blue": "\033[94m",
     "bright_magenta": "\033[95m",
     "bright_cyan": "\033[96m",
-    "bright_white": "\033[97m",
     }
 
     BACKGROUNDS = {
-    "bg_black": "\033[40m",
-    "bg_red": "\033[41m",
-    "bg_green": "\033[42m",
-    "bg_yellow": "\033[43m",
-    "bg_blue": "\033[44m",
-    "bg_magenta": "\033[45m",
-    "bg_cyan": "\033[46m",
-    "bg_white": "\033[47m",
-    "bg_bright_black": "\033[100m",
-    "bg_bright_red": "\033[101m",
-    "bg_bright_green": "\033[102m",
-    "bg_bright_yellow": "\033[103m",
-    "bg_bright_blue": "\033[104m",
-    "bg_bright_magenta": "\033[105m",
-    "bg_bright_cyan": "\033[106m",
-    "bg_bright_white": "\033[107m"
+    "white": "\033[47m",
+    "medium_gray": "\033[100m",
+    "black": "\033[40m",
+    "red": "\033[41m",
+    "green": "\033[42m",
+    "yellow": "\033[43m",
+    "blue": "\033[44m",
+    "magenta": "\033[45m",
+    "cyan": "\033[46m",
+    "bright_white": "\033[107m",
+    "bright_red": "\033[101m",
+    "bright_green": "\033[102m",
+    "bright_yellow": "\033[103m",
+    "bright_blue": "\033[104m",
+    "bright_magenta": "\033[105m",
+    "bright_cyan": "\033[106m",
     }
 
     STYLES = {
@@ -177,16 +177,20 @@ def {color}(self):
     for color in BACKGROUNDS:
         exec(f"""
 @property
-def {color}(self):
+def bg_{color}(self):
     self._background = "{color}"
     return self
         """)
 
 
 if __name__ == "__main__":
+    i = 0
     for color in Colorize.COLORS:
         for bg_color in Colorize.BACKGROUNDS:
-            print(Colorize("example", background = bg_color, color = color), end = "")
+            bold = (i % 3 == 0)
+            underline = (i % 2  == 0)
+            i += 1
+            print(Colorize("example", background = bg_color, color = color, bold = bold, underline = underline), end = "")
         print("")
 
 
