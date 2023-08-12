@@ -1,6 +1,6 @@
 __pycache__/
 
-*.md
+README.md
 
 .env
 .venv
@@ -9,6 +9,4 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
-.ipynb_checkpoints
 
