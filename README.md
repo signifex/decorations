@@ -69,9 +69,9 @@ The Colorize class leverages ANSI escape codes to offer a variety of text colors
 
 #### Features:
 - **Rich Color Palette**: Choose from a range of colors including red, green, blue, and more.
-- **Background Colors**: Set vibrant backgrounds for your text. 
-- **Easy access**: using a chain of methods, it's easier to create an object of the class. (Use the `bg_` prefix for easy access to various background colors e.g., `bg_red`, `bg_blue`).
+- **Background Colors**: Set vibrant backgrounds for your text.
 - **Text Styles**: Go beyond colors! Make your text `bold`, `underline`, or even `blink`.
+- **Easy access**: using a chain of methods, it's easier to create an object of the class. (Use the `bg_` prefix to access background colors as class method e.g., `bg_red`, `bg_blue`).
 - **Quick print**: Instead of wrapping the object, just use classmethod `print`
 
 #### Usage:
