@@ -8,7 +8,7 @@ import sys
 from typing import Optional
 
 # another module of this library
-from decorators import Colorize
+from decorations import Colorize
 
 
 def function_status(name: Optional[str] = None, max_width: Optional[int] = None, catch_interruption: Optional[bool] = False, catch_exceptions: Optional[bool] = False):
@@ -118,9 +118,9 @@ def function_status(name: Optional[str] = None, max_width: Optional[int] = None,
                 line = status_line(ending = {"text" : "EXIT", "color" : "red"})
                 print(line, file = old_stdout)
                 if new_stdout.getvalue():
-                    print("", file = old_stdout)
+                    print(file = old_stdout)
                     print(new_stdout.getvalue(), end = "", file = old_stdout)
-                    print("", file = old_stdout)
+                    print(file = old_stdout)
                 raise
 
             except KeyboardInterrupt:
@@ -129,12 +129,12 @@ def function_status(name: Optional[str] = None, max_width: Optional[int] = None,
                 print(line, file = old_stdout)
 
                 if new_stdout.getvalue():
-                    print("", file = old_stdout)
+                    print(file = old_stdout)
                     print(new_stdout.getvalue(), end = "", file = old_stdout)
-                    print("", file = old_stdout)
+                    print(file = old_stdout)
 
                 if not _catch_iterruption:
-                    print("", file = old_stdout)
+                    print(file = old_stdout)
                     raise
 
             except Exception as e:
@@ -143,19 +143,19 @@ def function_status(name: Optional[str] = None, max_width: Optional[int] = None,
                 print(line, file = old_stdout)
 
                 if new_stdout.getvalue():
-                    print("", file = old_stdout)
+                    print(file = old_stdout)
                     print(new_stdout.getvalue(), end = "", file = old_stdout)
-                    print("", file = old_stdout)
+                    print(file = old_stdout)
 
                 if not _catch_exceptions:
-                    print("", file = old_stdout)
+                    print(file = old_stdout)
                     raise e
 
                 else:
                     if not new_stdout.getvalue():
-                        print("", file = old_stdout)
+                        print(file = old_stdout)
                     traceback.print_exc()
-                    print("", file = old_stdout)
+                    print(file = old_stdout)
 
             finally:
 
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     try:
         exception_function()
     except ValueError:
-        print("Caught ValueError in exception_function!")
+        print("Caught ValueError in exception_function!\n")
 
     # 3. Function simulating a KeyboardInterrupt, caught within a try-except block
     @function_status(name="Interrupt Test", catch_interruption=True, catch_exceptions=False)
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     try:
         print_and_exception_function()
     except RuntimeError:
-        print("Caught RuntimeError in print_and_exception_function!")
+        print("Caught RuntimeError in print_and_exception_function!\n")
 
     # 5.Calling the decorator without args
     @function_status()
