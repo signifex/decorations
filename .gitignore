@@ -1,6 +1,14 @@
-# Ignoring specific files
-README.md
-
-# Ignoring directories
 __pycache__/
+
+*.md
+
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+.ipynb_checkpoints
 
