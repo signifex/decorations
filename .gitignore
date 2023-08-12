@@ -1,0 +1,6 @@
+# Ignoring specific files
+README.md
+
+# Ignoring directories
+__pycache__/
+
