@@ -1,5 +1,5 @@
 
-# Decorators Library
+# Decorations Library
 Elevate your Python development experience with a collection of decorators and utilities tailored for improved visibility and presentation in the terminal.
 
 ## Installation
