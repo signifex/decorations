@@ -8,7 +8,7 @@ import sys
 from typing import Optional
 
 # another module of this library
-from colorize import Colorize
+from .colorize import Colorize
 
 
 def function_status(name: Optional[str] = None, max_width: Optional[int] = None, catch_interruption: Optional[bool] = False, catch_exceptions: Optional[bool] = False):
