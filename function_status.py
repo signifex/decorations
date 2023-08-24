@@ -170,7 +170,7 @@ class PrintingStyle:
         if text:
             if self.style == "line":
                 g = next(self.box)
-            else 
+            else
 
             return next(self.)
             return self.boxed_text(text)
