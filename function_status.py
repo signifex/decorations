@@ -5,13 +5,183 @@ import traceback
 import shutil
 import sys
 
-from typing import Optional
-
-# another module of this library
-from .colorize import Colorize
+from typing import Optional, Literal
 
 
-def function_status(name: Optional[str] = None, max_width: Optional[int] = None, catch_interruption: Optional[bool] = False, catch_exceptions: Optional[bool] = False):
+class Colorize:
+
+    '''
+    Donno how it works in other shells, so be careful about it. I dont dive a fuck.
+    Actually it is a shorted version of my another module, but I want to make this script
+    as independent, as possible
+    '''
+
+    RESET_COLOR = "\033[0m"
+
+    COLORS = {
+    "black": "\033[30m",
+    "red": "\033[31m",
+    "green": "\033[32m",
+    "yellow": "\033[33m",
+    "blue": "\033[34m",
+    "magenta": "\033[35m",
+    "cyan": "\033[36m",
+    }
+
+    STYLES = {
+        "bold": "\033[1m",
+    }
+
+    END_STYLES = {
+        "bold": "\033[22m",
+    }
+
+    def __init__(self,
+                 text: str,
+                 color: Optional[str] = None,
+                 bold: Optional[bool] = False,
+                 ) -> NoReturn:
+
+        self._color = color
+        self._text = text
+        self._bold = bold
+
+    def __str__(self) -> str:
+
+        style_code = []
+        style_end = []
+
+        if self._bold:
+            style_code.append(self.STYLES["bold"])
+            style_end.append(self.END_STYLES["bold"])
+
+        if self._color:
+            style_code.append(self.COLORS.get(self._color, ""))
+            style_end.append(self.RESET_COLOR)
+
+        return ''.join(style_code) + self._text + ''.join(reversed(style_end))
+
+    def __add__(self, adding_str: str) -> str:
+        return self.__str__() + adding_str
+
+    def __len__(self) -> int:
+        return len(self._text)
+
+class PrintingStyle:
+
+    STYLES = Literal["box", "line"]
+
+    STATUS = Literal["EXIT", "SECCESS", "ABORTED", "ERROR"]
+
+
+    def __init__(self, name: str, width: int, function_status: STATUS = "SECCESS", style: STYLES = "line"):
+
+        self.name = name
+
+        self.width = width
+
+        self.boxed_space = width - 6
+
+        self.style = style
+
+        self.splited_lines = [] #cache
+
+        elif function_status == "EXIT":
+            self.ending = Colorize(text = function_status, color = "red", bold = True)
+
+        elif function_status == "ERROR":
+            self.ending = Colorize(text = function_status, color = "red")
+
+        elif function_status == "SUCCESS":
+            self.ending = Colorize(text = function_status, color = "green")
+
+        elif function_status == "ABORTED":
+            self.ending = Colorize(text = function_status, color = "green")
+
+    def line(self):
+
+        # 2 spaces around line + 2 spaces around dots + 2 spaces in brackets + 2 brackets = 8
+
+        short_string = Colorize(text = "It's too tight, sempai", color = "red")
+
+        if dot_count_processing >= 15:
+            yield short_string
+            yield short_string
+
+        else:
+            dot_count_processing = self.width - len(self.name) - len("PROCESSED") - 8
+            process = "\r " + self.name + " " + (dot_count_processing * ".") + " [ " + "PROCESSED" + " ]"
+            ready = "\r " + self.name + " " + (dot_count_processing * ".") + " [ " + self.ending + " ]"
+
+            yield process
+            yield ready
+
+    def box(self, text):
+
+        top = "\r ┌" + self.name + "─" * (self.width - len(self.name) - 4) + "┐ "
+        bottom= "\r └" + "─" * (self.width - len(self.ending) - 4) + self.ending + "┘ "
+
+        yield top_part
+
+        while True:
+            text = (yield)
+
+            yield self._boxed_text(text) if text else break
+
+        yield bottom
+
+    def _boxed_text(self, text):
+
+        lines = text.splitlines()
+        boxed_lines = []
+
+        for line in lines:
+
+            if len(line) <= self.boxed_space:
+                self._border_wrapper(line)
+
+            else:
+                self.splited_lines.clear()
+                self._split_line(line)
+
+        return "\n".join(boxed_lines)
+
+    def _split_line(self, line):
+
+        cuted_text, left_text = line[:self.boxed_space], line[self.boxed_space:]
+
+        if len(cuted_text) <= self.boxed_space:
+            self._border_wrapper(cuted_text)
+
+        elif len(left_text) > self.boxed_space:
+            self._border_wrapper(cuted_text)
+            self._split_line(left_text)
+
+        else:
+            self._border_wrapper(left_text)
+
+        return splited_lines
+
+    def _border_wrapper(self, text):
+        splited_lines.append(f" │ {text.ljust(self.boxed_space)} │ ")
+
+    def __str__(self, text = None):
+
+        if text:
+            if self.style == "line":
+                g = next(self.box)
+            else 
+
+            return next(self.)
+            return self.boxed_text(text)
+
+        else:
+            return self.box() if self.style = "box" else self.line()
+
+def function_status(name: Optional[str] = None,
+                    width: Optional[int] = None,
+                    catch_interruption: Optional[bool] = False,
+                    catch_exceptions: Optional[bool] = False):
 
     """
     A decorator to enhance the visibility and presentation of function execution in the terminal.
@@ -20,7 +190,7 @@ def function_status(name: Optional[str] = None, max_width: Optional[int] = None,
     - name (str, optional): The custom name to display in the terminal for the function.
                             If not provided, the actual name of the function will be used.
 
-    - max_width (int, optional): Specifies the maximum width for the status line in the terminal.
+    - width (int, optional): Specifies the maximum width for the status line in the terminal.
                                  Helps in formatting the output for terminals of varying widths.
 
     - catch_interruption (bool, optional): If set to True, the decorator will catch KeyboardInterrupt,
@@ -61,44 +231,21 @@ def function_status(name: Optional[str] = None, max_width: Optional[int] = None,
 
         def second_layer(*args, **kwargs):
 
-            def status_line(ending: dict):
-
-                stage_name = name
-                terminal_width = max_width
-
-                if stage_name is None:
-                    stage_name = func.__name__
-
-                if terminal_width is None:
-                    terminal_width = shutil.get_terminal_size().columns
-
-                variable_len = len(stage_name) + len(ending["text"])
-
-                # space before dots + space after dots + 2 spaces in brackets + 2 brackets = 6
-                dot_count_processing = terminal_width - variable_len - 8
-
-                if dot_count_processing >= 10:
-                    status_string = ("\r " + stage_name + " " +
-                                     (dot_count_processing * ".") +" [ " +
-                                     str(Colorize(text = ending["text"], color = ending["color"])) + " ]")
-
-                else:
-                    status_string = str(Colorize(text = "It's too tight, sempai", color = "red"))
-
-                return status_string
-
-
-            _catch_iterruption = catch_interruption
-            _catch_exceptions = catch_exceptions
-
             # Catching text output stream
             old_stdout = sys.stdout
             new_stdout = io.StringIO()
             sys.stdout = new_stdout
 
-            line = status_line(ending = {"text" : "PROCESSING", "color" : "white"})
+            _catch_iterruption = catch_interruption
+            _catch_exceptions = catch_exceptions
 
-            print(line, end = "\r", file = old_stdout)
+            _width = width if width else shutil.get_terminal_size().columns
+
+            _name = name if name else func.__name__
+
+            status = Styles(name = _name, _width, function_status = "PROCESSED")
+
+            print(status.line, end = "\r", file = old_stdout)
 
             try:
 
@@ -161,6 +308,7 @@ def function_status(name: Optional[str] = None, max_width: Optional[int] = None,
 
                 # restoring text output stream
                 sys.stdout = old_stdout
+                new_stdout.close()
 
         return second_layer
 
