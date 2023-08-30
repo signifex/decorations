@@ -54,6 +54,9 @@ def formatting_function():
 
 ```
 ![output](https://github.com/signifex/decorations/assets/97762325/1463251e-9543-4969-83b0-96e6a01f69e4)
+![image](https://github.com/signifex/decorations/assets/97762325/e6b1ddc0-01ed-4e80-93df-fcb7bb82eab8)
+
+
 > **Note:** Result from running the module on its own, contains a number of test functions to check the output
 
 #### Parameters:
