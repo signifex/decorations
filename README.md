@@ -29,33 +29,35 @@ Beautify your terminal outputs with a plethora of color options.
 Decorate your functions to receive feedback:
 
 ```python
-from decorators import function_status
-import time
+@function_status(name="Line Test")
+def line_text():
+    return "returned from line test."
 
-@function_status(name="Simple Function")
-def simple_function():
-    print("Inside of a simple function.")
-    time.sleep(0.5)
+print(line_text())
 
-@function_status(name="Function with Exception", catch_exceptions=True)
-def function_with_exception():
-    time.sleep(0.5)
-    raise ValueError("Custom message error!")
+@function_status(name="Basic Test")
+def basic_function():
+    print("Inside basic function.")
+    return "Good!"
 
-@function_status(name= "Interrupted function", catch_interruption=True)
-def long_running_function():
-    time.sleep(5)
-    raise KeyboardInterrupt
+print(basic_function())
 
-@function_status(name= "Exit function")
-def exit_function():
-    exit()
+@function_status(name="Text Formatting Test")
+def formatting_function():
+    print("Testing multiple lines of text\n" * 3)
+    print("\tTesting tab character.")
+    print("Testing \tsplit tab characters.")
+    print("Testing carriage return: ABC\rXYZ")
+    print("Mixing\ttabs and\nnewlines.")
+    return "Done with formatting tests!"
+
 ```
-![record](https://github.com/signifex/decorations/assets/97762325/d046da18-04a0-4e2e-8097-736ffa0d1af1)
+> **Note:** Result from running the module on its own, contains a number of test functions to check the output
+![output](https://github.com/signifex/decorations/assets/97762325/1463251e-9543-4969-83b0-96e6a01f69e4)
 
 #### Parameters:
 - **name**: (Optional) Custom display name for the terminal. Defaults to the function's name.
-- **max_width**: (Optional) Maximum width for the status line in the terminal.
+- **width**: (Optional) Maximum width for the status line in the terminal.
 - **catch_interruption**: (Optional) Set True to handle KeyboardInterrupt gracefully, default is False.
 - **catch_exceptions**: (Optional) Set True to catch exceptions other than KeyboardInterrupt, default is False.
 

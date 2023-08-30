@@ -128,6 +128,12 @@ class Colorize:
 
         return ''.join(style_code) + self._text + ''.join(reversed(style_end))
 
+    def __add__(self, adding_str: str) -> str:
+        return self.__str__() + adding_str
+
+    def __len__(self) -> int:
+        return len(self._text)
+
     def __repr__(self):
 
         default_repr = super().__repr__()
