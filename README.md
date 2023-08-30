@@ -27,6 +27,7 @@ Beautify your terminal outputs with a plethora of color options.
 
 ### Function Status Decorator
 Decorate your functions to receive feedback:
+> **Note:** The decorator intercepts sys.stdout. Any alterations to sys.stdout within the decorated function might disrupt both the function and decorator's logic.
 
 ```python
 @function_status(name="Line Test")
@@ -52,16 +53,31 @@ def formatting_function():
     return "Done with formatting tests!"
 
 ```
-> **Note:** Result from running the module on its own, contains a number of test functions to check the output
 ![output](https://github.com/signifex/decorations/assets/97762325/1463251e-9543-4969-83b0-96e6a01f69e4)
+> **Note:** Result from running the module on its own, contains a number of test functions to check the output
 
 #### Parameters:
 - **name**: (Optional) Custom display name for the terminal. Defaults to the function's name.
-- **width**: (Optional) Maximum width for the status line in the terminal.
+- **width**: (Optional) Maximum width for the status line/box in the terminal.
 - **catch_interruption**: (Optional) Set True to handle KeyboardInterrupt gracefully, default is False.
-- **catch_exceptions**: (Optional) Set True to catch exceptions other than KeyboardInterrupt, default is False.
+- **catch_exceptions**: (Optional) Set True to catch exceptions other than KeyboardInterrupt and SystemExit, default is False.
 
-> **Note:** The decorator intercepts sys.stdout. Any alterations to sys.stdout within the decorated function might disrupt both the function and decorator's logic.
+### How it Works:
+#### Threaded Execution:
+The decorated function runs inside a separate thread using Python's ThreadPoolExecutor. This allows for concurrent monitoring of the function's execution.
+#### Capturing Standard Output:
+The module captures the standard output (sys.stdout) of the decorated function. This means any print statements or standard output produced by the function is intercepted.
+The captured output can then be formatted, decorated, or manipulated as desired before being displayed to the terminal.
+#### Status Reporting:
+During the function's execution, the decorator continually checks for any captured output.
+It wraps the captured output with visual elements (e.g., boxes, lines) to enhance readability.
+The status of the function (e.g., "PROCESSING", "SUCCESS", "ERROR") is displayed in a visually appealing manner.
+#### Error Handling:
+The decorator is designed to catch various exceptions, including SystemExit, KeyboardInterrupt, and general exceptions.
+Depending on the configuration, certain exceptions can either be caught and processed or allowed to propagate.
+#### Customization:
+Users can customize the name and width of the status display.
+Additional options allow users to specify whether interruptions (KeyboardInterrupt) or general exceptions should be caught by the decorator.
 
 ### Colorize Class
 Elevate your terminal outputs with vibrant colors and styles using the Colorize class.
