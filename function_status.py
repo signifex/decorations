@@ -318,7 +318,7 @@ if __name__ == "__main__":
 
     custom_width_box()
 
-    @function_status(name = "interrupt me", catch_interruption = True)
+    @function_status(name = "INTERRUPT ME", catch_interruption = True)
     def long_function():
         time.sleep(10)
         print("text")
