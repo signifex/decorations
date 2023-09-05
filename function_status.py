@@ -1,77 +1,18 @@
-import inspect
 import textwrap
-import traceback
 import time
 import shutil
 import sys
+
+from threading import Thread
 
 from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 from typing import Optional, Literal, List, NoReturn
 
-
-class Colorize:
-
-    '''
-    Donno how it works in other shells, so be careful about it. I dont dive a fuck.
-    Actually it is a shorted version of my another module, but I want to make this script
-    as independent, as possible
-    '''
-
-    RESET_COLOR = "\033[0m"
-
-    COLORS = {
-    "black": "\033[30m",
-    "red": "\033[31m",
-    "green": "\033[32m",
-    "yellow": "\033[33m",
-    "blue": "\033[34m",
-    "magenta": "\033[35m",
-    "cyan": "\033[36m",
-    }
-
-    STYLES = {
-        "bold": "\033[1m",
-    }
-
-    END_STYLES = {
-        "bold": "\033[22m",
-    }
-
-    def __init__(self,
-                 text: str,
-                 color: Optional[str] = None,
-                 bold: Optional[bool] = False,
-                 ) -> NoReturn:
-
-        self._color = color
-        self._text = text
-        self._bold = bold
-
-    def __str__(self) -> str:
-
-        style_code = []
-        style_end = []
-
-        if self._bold:
-            style_code.append(self.STYLES["bold"])
-            style_end.append(self.END_STYLES["bold"])
-
-        if self._color:
-            style_code.append(self.COLORS.get(self._color, ""))
-            style_end.append(self.RESET_COLOR)
-
-        return ''.join(style_code) + self._text + ''.join(reversed(style_end))
-
-    def __add__(self, adding_str: str) -> str:
-        return self.__str__() + adding_str
-
-    def __len__(self) -> int:
-        return len(self._text)
+from decorations import Colorize
 
 class StatusGenarator:
 
-    STATUS = Literal["EXIT", "SUCCESS", "ABORTED", "ERROR"]
     STYLE = Literal["line", "box"]
 
     def __init__(self, name: str, width: int, colorize: bool = True, style: STYLE = "line"):
@@ -110,33 +51,6 @@ class StatusGenarator:
         except Exception as e:
             message = "error call of the status geneator class"
             print(message, e, file = sys.stderr)
-
-    @property
-    def print(self):
-        return self
-
-    @property
-    def function_status(self):
-        return self.status
-
-    @function_status.setter
-    def function_status(self, new_status: STATUS):
-        self.status = self.colorize_status(new_status) if self.colorize else new_status
-
-    @staticmethod
-    def colorize_status(colorizing_status):
-
-        if colorizing_status == "EXIT":
-            return Colorize(text = "EXIT", color = "red", bold = True)
-
-        elif colorizing_status == "ERROR":
-            return Colorize(text = "ERROR", color = "red")
-
-        elif colorizing_status == "SUCCESS":
-            return Colorize(text = "SUCCESS", color = "green")
-
-        elif colorizing_status == "ABORTED":
-            return Colorize(text = "ABORTED", color = "yellow")
 
 
     def line(self) -> str:
@@ -179,13 +93,11 @@ class StatusGenarator:
             return line
 
         def get_closing_line():
-            base_string = "\r└{dashes} [ {status} ] ┘"
+            base_string = "\r└{dashes} [ {status} ] ┘\r"
             dashes_amount = self.width - len(self.status) - 8
             line = base_string.format(
                 status = self.status,
                 dashes = '─' * dashes_amount)
-            line = line + "\r" if self.status == "PROCESSING" else line + "\n"
-
             return line
 
         def get_boxed_text(text) -> List[str]:
@@ -197,13 +109,13 @@ class StatusGenarator:
             for line in lines:
 
                 if not line.strip():
-                    boxed_lines.append(f"│ {''.ljust(boxed_space)} │")
+                    boxed_lines.append(f"\r│ {''.ljust(boxed_space)} │")
 
                 else:
                     wrapped_text = textwrap.fill(line, boxed_space)
 
                     for wrapped_line in wrapped_text.splitlines():
-                        boxed_lines.append(f"│ {wrapped_line.ljust(boxed_space)} │")
+                        boxed_lines.append(f"\r│ {wrapped_line.ljust(boxed_space)} │")
 
             boxed_lines.append(get_closing_line())
 
@@ -215,7 +127,7 @@ class StatusGenarator:
 
             text = yield get_boxed_text(text)
 
-        yield get_closing_line()
+        yield get_closing_line() + "\n"
 
 
 def function_status(name: Optional[str] = None,
@@ -232,6 +144,15 @@ def function_status(name: Optional[str] = None,
 
             name = name if name else func.__name__
 
+            main_function_processing = True
+            func_result = None
+            error_message = None
+
+            def checking_thread():
+                while main_function_processing:
+                    check_prints()
+                    time.sleep(0.1)
+
             def check_prints():
                 text = buffer.getvalue()
                 if text:
@@ -246,61 +167,60 @@ def function_status(name: Optional[str] = None,
             original_stdout = sys.stdout
             sys.stdout = buffer = StringIO()
 
-            with ThreadPoolExecutor(max_workers = 1) as executor:
+            original_stdout.write(current_status())
 
-                original_stdout.write(current_status())
-
-                future = executor.submit(func, *args, **kwargs)
-                while not future.done():
-                    time.sleep(0.1)
-                    check_prints()
+            thread = Thread(target = checking_thread)
+            thread.start()
 
             try:
-                result = future.result()
-                check_prints()
-                current_status.function_status = "SUCCESS"
-                original_stdout.write(current_status())
-                return result
 
-            except SystemExit:
+                func_result = func(*args, **kwargs)
+                current_status.status = Colorize(text = "SUCCESS", color = "green") if colorize else "SUCCESS"
 
-                check_prints()
+            except SystemExit as e:
 
-                current_status.function_status = "EXIT"
-                original_stdout.write(current_status())
-
+                current_status.status = Colorize(text = "EXIT", color = "red", bold = True) if colorize else "EXIT"
+                if str(e):
+                    error_message = e
                 raise
 
-            except KeyboardInterrupt:
+            except KeyboardInterrupt as e:
 
-                check_prints()
+                current_status.status = Colorize(text = "ABORTED", color = "yellow") if colorize else "ABORTED"
 
-                current_status.function_status = "ABORTED"
-                original_stdout.write(current_status())
+                if str(e) != "KeyboardInterrupt":
+                    error_message = str(e)
 
                 if not catch_interruption:
                     raise
 
             except Exception as e:
 
-                check_prints()
-
-                current_status.function_status = "ERROR"
+                current_status.status = Colorize(text = "ERROR", color = "red") if colorize else "ERROR"
 
                 if not catch_exceptions:
-                    original_stdout.write(current_status())
                     raise e from e
 
                 else:
-                    original_stdout.write(current_status(e))
-                    original_stdout.write(current_status())
+                    error_message = str(e)
 
             finally:
 
+                main_function_processing = False
+                thread.join()
+                check_prints()
+
+                if error_message:
+                    error_message = current_status(error_message)
+                    original_stdout.write(error_message)
+
+                original_stdout.write(current_status())
                 # restoring text current_status stream
                 sys.stdout = original_stdout
                 buffer.close()
                 del(current_status)
+
+            return func_result
 
         return second_layer
 
@@ -313,84 +233,82 @@ def function_status(name: Optional[str] = None,
 
 if __name__ == "__main__":
 
-    # 1. Basic test
-    @function_status(name="Line Test")
+    @function_status(name = "Basic line test")
     def line_text():
-        return "returned from line test."
+        pass
 
-    print(line_text())
+    line_text()
 
-    # 2. Basic test with inside print
-    @function_status(name="Basic Test")
-    def basic_function():
-        print("Inside basic function.")
-        return "Good!"
+    @function_status()
+    def no_arguments_test():
+        pass
 
-    print(basic_function())
+    no_arguments_test()
 
-    # 3. Text formatting and multiple prints
-    @function_status(name="Text Formatting Test")
-    def formatting_function():
+    @function_status(name = "line error test")
+    def error_in_line():
+        1/0
+
+    try:
+        error_in_line()
+    except ZeroDivisionError as e:
+        print(e)
+
+    @function_status(name = "catching error test", catch_exceptions = True)
+    def error_in_box():
+        1/0
+
+    error_in_box()
+
+    @function_status(name = "Text formatting test")
+    def formatting_test():
         print("Testing multiple lines of text\n" * 3)
         print("\tTesting tab character.")
         print("Testing \tsplit tab characters.")
         print("Testing carriage return: ABC\rXYZ")
         print("Mixing\ttabs and\nnewlines.")
-        return "Done with formatting tests!"
 
-    print(formatting_function())
+    formatting_test()
 
-    # 4. Long text test
-    @function_status(name="Long Text Test")
-    def long_text_function():
-        for i in range(10):
-            print(f"This is a long line of text number {i}. " * 3)
+    @function_status(name = "Long Text Test")
+    def long_text_test():
+        for i in range(5):
+            print(f"This is a long line of text number {i}. " * 10)
             time.sleep(0.2)
-        return "Long text test completed!"
 
-    print(long_text_function())
+    long_text_test()
 
-    # 5. Function simulating a KeyboardInterrupt
-    @function_status(name="Interrupt Test", catch_interruption=True, catch_exceptions=False)
-    def interrupt_function():
+    @function_status(name = "Interrupt Test", catch_interruption = True)
+    def interruption_test():
         print("Simulating a keyboard interrupt...")
         raise KeyboardInterrupt
 
-    try:
-        interrupt_function()
-    except KeyboardInterrupt:
-        print("Caught KeyboardInterrupt in interrupt_function!")
+    interruption_test()
 
-    # 6. Printing special characters
-    @function_status(name="Special Characters Test")
-    def special_characters_function():
-        special_chars = '!@#$%^&*()_+-=[]{}|;:,.<>?/`~"\'\\'
-        print(f"Testing special characters: {special_chars}")
-        return "Special characters test completed!"
+    @function_status(name = "Custom width line test", width = 60)
+    def custom_width_line():
+        pass
 
-    print(special_characters_function())
+    custom_width_line()
 
-    # 7. Function that waits and prints intermittently
-    @function_status(name="Intermittent Print Test", width=79)
-    def intermittent_print():
+    @function_status(name = "Custom wifth box test", width = 60)
+    def custom_width_box():
         for i in range(5):
             print(f"Intermittent print {i}")
             time.sleep(0.5)
 
-    intermittent_print()
+    custom_width_box()
 
-    # 8. Testing custom width of the status line
-    @function_status(name="Custom Width Test", width=60)
-    def custom_width_function():
-        print("Testing a custom width for the status line.")
-        time.sleep(1)
+    @function_status(name = "interrupt me", catch_interruption = True)
+    def long_function():
+        time.sleep(10)
+        print("text")
 
-    custom_width_function()
+    long_function()
 
-    # 9. Function printing output and then raising an error
-    @function_status(name="Print & Raise Error Test")
+    @function_status(name = "Print & SystemExit")
     def print_and_raise_error_function():
-        print("This function will print this line and then raise an systemexit.")
+        print("This function is printing this text and then raise the systemexit error")
         raise SystemExit
 
     print_and_raise_error_function()

@@ -190,6 +190,7 @@ def bg_{color}(self):
 
 
 if __name__ == "__main__":
+
     i = 0
     for color in Colorize.COLORS:
         for bg_color in Colorize.BACKGROUNDS:
