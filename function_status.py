@@ -1,133 +1,146 @@
 import textwrap
 import time
+import traceback
 import shutil
 import sys
 
 from threading import Thread
-
-from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 from typing import Optional, Literal, List, NoReturn
 
 from decorations import Colorize
 
-class StatusGenarator:
+class FunctionStatus:
 
-    STYLE = Literal["line", "box"]
+    def __init__(self,
+                 name: str,
+                 width: Optional[int] = None,
+                 style: Literal["line", "box"] = "line",
+                 status: Optional[str] = "PROCESSING",
+                 print_out: Optional[bool] = True):
 
-    def __init__(self, name: str, width: int, colorize: bool = True, style: STYLE = "line"):
+        self._name = name
+        self._status = status
+        self._width = width if width else shutil.get_terminal_size().columns
+        self._style = style
+        self._print = print_out
+        self._state = "not_opened" # "not_opened", "opened", "text_wrapped", "closed"
 
-        self.name = name
-        self.width = width if width else shutil.get_terminal_size().columns
-        self.generator = self.line() if style == "line" else self.box()
-        self.colorize = colorize
-        self.status = "PROCESSING"
+    @property
+    def open(self) -> str:
 
-    def __call__(self, text = None):
+        if self._state != "not_opened":
+            raise RuntimeError("Object can't be opened again without closing.")
+
+        self._state = "opened"
+
+        if self._style == "line":
+            current_status = self._simple_line() + "\r"
+        else:
+            current_status = self._box_opening() + "\n" + self._box_closing() + "\r"
+
+        if self._print:
+            sys.stdout.write(current_status)
+
+        return current_status
+
+    def wrap(self, text):
+
+        if self._state not in ["opened", "wrapping"]:
+            raise RuntimeError("Object needs to be opened before wrapping.")
+
+        self._state = "wrapping"
+
+        current_status = ""
+
+        if self._style == "line":
+            self._style = "box"
+            current_status += self._box_opening() + "\n"
+
+        current_status += self._box_wrap(text) + "\n" + self._box_closing() + "\r"
+
+        if self._print:
+            sys.stdout.write(current_status)
+
+        return current_status
+
+    @property
+    def close(self):
+
+        if self._state not in ["opened", "wrapping"]:
+            raise RuntimeError("Object can't be closed without being opened.")
+
+        self._state = "closed"
+
+        current_status = self._simple_line() + "\n" if self._style == "line" else self._box_closing() + "\n"
+
+        if self._print:
+            sys.stdout.write(current_status)
+
+        return current_status
+
+    def set_status(self, new_status: str) -> NoReturn:
+        self._status = new_status
+
+    def _simple_line(self) -> str:
 
         '''
-        comparing self.genarator.__name__ == "line_style" raises no error,
-        but according python documantation and gpt, generators has no __name__ arrt.
-        so I change it to gi_code.co_name, to make sure,
-        that comparing is working on any device
+        dots amaount:
+        2 spaces around dots +
+        2 spaces in brackets +
+        brackets around status = 6
         '''
-        try:
-            # simple line
-            if not text and self.generator.gi_code.co_name == "line":
-                return next(self.generator)
+        error_line = "It's too tight, sempai"
+        base_string = "\r{name} {dots} [ {status} ]"
+        dots_amount = self._width - len(self._name) - len(self._status) - 6
+        line = base_string.format(
+            name = self._name,
+            dots = "." * dots_amount,
+            status = self._status)
 
-            # close the line generator and change style to box
-            elif text and self.generator.gi_code.co_name == "line":
-                self.generator.close()
-                self.generator = self.box()
-                box_top = next(self.generator)
-                box_inner = self.generator.send(text)
-                return box_top + box_inner
+        return line if dots_amount > 5 else error_line
 
-            # process box
+
+    def _box_opening(self) -> str:
+        base_line = "\r┌ {name} {dashes}┐"
+        dashes_amount = self._width - len(self._name) - 4
+        line = base_line.format(
+            name = self._name,
+            dashes = "─" * dashes_amount)
+        return line
+
+
+    def _box_closing(self) -> str:
+        base_line = "\r└{dashes} [ {status} ] ┘"
+        dashes_amount = self._width - len(self._status) - 8
+        line = base_line.format(
+            status = self._status,
+            dashes = '─' * dashes_amount)
+        return line
+
+
+    def _box_wrap(self, text) -> str:
+
+        boxed_lines = []
+        lines = text.splitlines()
+        boxed_space = self._width - 4
+
+        for line in lines:
+
+            if not line.strip():
+                boxed_lines.append(f"│ {''.ljust(boxed_space)} │")
+
             else:
-                return self.generator.send(text)
+                wrapped_text = textwrap.fill(line, boxed_space)
 
-        except Exception as e:
-            message = "error call of the status geneator class"
-            print(message, e, file = sys.stderr)
+                for wrapped_line in wrapped_text.splitlines():
+                    boxed_lines.append(f"│ {wrapped_line.ljust(boxed_space)} │")
+
+        return "\r" + "\n".join(boxed_lines)
 
 
-    def line(self) -> str:
 
-        def create_line():
-            '''
-            dots amaount:
-            2 spaces around dots +
-            2 spaces in brackets +
-            2 spaces around whole line +
-            brackets around status = 8
-            '''
-            error_line = "It's too tight, sempai"
-            base_string = "\r {name} {dots} [ {status} ] "
-            dots_amount = self.width - len(self.name) - len(self.status) - 8
-            line = base_string.format(
-                name = self.name,
-                dots = "." * dots_amount,
-                status = self.status)
 
-            return line if dots_amount > 5 else error_line
-
-        yield create_line() + "\r"
-
-        yield create_line() + "\n"
-
-    def box(self) -> str:
-
-        '''
-        returns opening line + closing line (with processing status and carriage return),
-        then boxed text + closing box (same as before) while the generator getting text
-        and at the end closing line, but now the status must be changed and the line it will be without carriage return
-        '''
-        def get_opening_line():
-            base_string = "\r┌ {name} {dashes}┐\n"
-            dashes_amount = self.width - len(self.name) - 4
-            line = base_string.format(
-                name = self.name,
-                dashes = "─" * dashes_amount)
-            return line
-
-        def get_closing_line():
-            base_string = "\r└{dashes} [ {status} ] ┘\r"
-            dashes_amount = self.width - len(self.status) - 8
-            line = base_string.format(
-                status = self.status,
-                dashes = '─' * dashes_amount)
-            return line
-
-        def get_boxed_text(text) -> List[str]:
-
-            boxed_lines = []
-            lines = text.splitlines()
-            boxed_space = self.width - 4
-
-            for line in lines:
-
-                if not line.strip():
-                    boxed_lines.append(f"\r│ {''.ljust(boxed_space)} │")
-
-                else:
-                    wrapped_text = textwrap.fill(line, boxed_space)
-
-                    for wrapped_line in wrapped_text.splitlines():
-                        boxed_lines.append(f"\r│ {wrapped_line.ljust(boxed_space)} │")
-
-            boxed_lines.append(get_closing_line())
-
-            return "\n".join(boxed_lines)
-
-        text = yield get_opening_line() + get_closing_line()
-
-        while text is not None:
-
-            text = yield get_boxed_text(text)
-
-        yield get_closing_line() + "\n"
 
 
 def function_status(name: Optional[str] = None,
@@ -158,16 +171,16 @@ def function_status(name: Optional[str] = None,
                 if text:
                     buffer.truncate(0)
                     buffer.seek(0)
-                    wrapped_text = current_status(text)
+                    wrapped_text = current_status.wrap(text)
                     original_stdout.write(wrapped_text)
 
-            current_status = StatusGenarator(name, width)
+            current_status = FunctionStatus(name = name, width = width, print_out = False)
 
             # Catching text output stream
             original_stdout = sys.stdout
             sys.stdout = buffer = StringIO()
 
-            original_stdout.write(current_status())
+            original_stdout.write(current_status.open)
 
             thread = Thread(target = checking_thread)
             thread.start()
@@ -175,34 +188,39 @@ def function_status(name: Optional[str] = None,
             try:
 
                 func_result = func(*args, **kwargs)
-                current_status.status = Colorize(text = "SUCCESS", color = "green") if colorize else "SUCCESS"
+                new_status = Colorize(text = "SUCCESS", color = "green") if colorize else "SUCCESS"
+                current_status.set_status(new_status)
 
             except SystemExit as e:
 
-                current_status.status = Colorize(text = "EXIT", color = "red", bold = True) if colorize else "EXIT"
+                new_status = Colorize(text = "EXIT", color = "red", bold = True) if colorize else "EXIT"
+                current_status.set_status(new_status)
+
                 if str(e):
-                    error_message = e
+                    error_message = str(e)
                 raise
 
             except KeyboardInterrupt as e:
 
-                current_status.status = Colorize(text = "ABORTED", color = "yellow") if colorize else "ABORTED"
+                new_status = Colorize(text = "ABORTED", color = "yellow") if colorize else "ABORTED"
+                current_status.set_status(new_status)
 
                 if str(e) != "KeyboardInterrupt":
                     error_message = str(e)
 
                 if not catch_interruption:
-                    raise
+                    raise e from e
 
             except Exception as e:
 
-                current_status.status = Colorize(text = "ERROR", color = "red") if colorize else "ERROR"
+                new_status = Colorize(text = "ERROR", color = "red") if colorize else "ERROR"
+                current_status.set_status(new_status)
 
                 if not catch_exceptions:
                     raise e from e
 
                 else:
-                    error_message = str(e)
+                    error_message = traceback.format_exc(limit = -1)
 
             finally:
 
@@ -211,10 +229,10 @@ def function_status(name: Optional[str] = None,
                 check_prints()
 
                 if error_message:
-                    error_message = current_status(error_message)
+                    error_message = current_status.wrap(error_message)
                     original_stdout.write(error_message)
 
-                original_stdout.write(current_status())
+                original_stdout.write(current_status.close)
                 # restoring text current_status stream
                 sys.stdout = original_stdout
                 buffer.close()
@@ -245,17 +263,18 @@ if __name__ == "__main__":
 
     no_arguments_test()
 
-    @function_status(name = "line error test")
+    @function_status(name = "Line error test")
     def error_in_line():
         1/0
 
     try:
         error_in_line()
     except ZeroDivisionError as e:
-        print(e)
+        pass
 
-    @function_status(name = "catching error test", catch_exceptions = True)
+    @function_status(name = "Catching error test", catch_exceptions = True)
     def error_in_box():
+        print("Here must be this line, empty line, traceback for zero devision error", end = "\n\n")
         1/0
 
     error_in_box()
