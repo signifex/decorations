@@ -1,221 +1,228 @@
-import inspect
 import textwrap
-import traceback
 import time
+import traceback
 import shutil
 import sys
 
-from concurrent.futures import ThreadPoolExecutor
+from threading import Thread
 from io import StringIO
 from typing import Optional, Literal, List, NoReturn
 
+from decorations import Colorize
 
-class Colorize:
+class FunctionStatus:
 
-    '''
-    Donno how it works in other shells, so be careful about it. I dont dive a fuck.
-    Actually it is a shorted version of my another module, but I want to make this script
-    as independent, as possible
-    '''
+    """
+    Represents the status of a function's execution and provides visualization tools.
 
-    RESET_COLOR = "\033[0m"
+    The `FunctionStatus` class offers multiple ways to visualize or track the status
+    of a function's execution:
 
-    COLORS = {
-    "black": "\033[30m",
-    "red": "\033[31m",
-    "green": "\033[32m",
-    "yellow": "\033[33m",
-    "blue": "\033[34m",
-    "magenta": "\033[35m",
-    "cyan": "\033[36m",
-    }
+    1. **Manual Usage**: For maximum customization, you can use the class directly
+    and call the methods in sequence:
 
-    STYLES = {
-        "bold": "\033[1m",
-    }
+       - open: To open the status. Returns the formatted string.
+       - wrap: To wrap text inside the status. Returns the wrapped text as a string.
+       - close: To close the status. Returns the closed status string.
 
-    END_STYLES = {
-        "bold": "\033[22m",
-    }
+    These methods return formatted strings, which can be particularly useful when
+    `print_out` is set to `False`, allowing manual handling and printing of the strings.
+
+       Example:
+
+       fs = FunctionStatus(name="Test")
+       status_open = fs.open
+       wrapped_text = fs.wrap("Function started...")
+       status_close = fs.close
+
+    2. **Context Manager**: For simplicity with limited customization, you can use
+       the class within a `with` statement. This ensures the correct order of operations
+       (`open`, `wrap`, `close`):
+
+       Example:
+
+       fs = FunctionStatus(name="Test")
+       with fs:
+           fs.wrap("Processing...")
+
+    3. **Decorator**: The decorator provides a way to wrap entire functions and capture
+       their stdout. It uses threading to maintain responsiveness and automatically
+       manages the opening, wrapping, and closing of the status:
+
+       @function_status(name = "some function")
+       def some_function():
+           pass
+
+    Attributes:
+
+    - name: A string representing the name of the function.
+
+    - width: An optional integer specifying the width of the status display.
+      If not provided, the default width is set to the width of the terminal.
+
+    - style: A string that can be either "line" or "box", determining the
+      style of the status display.
+
+    - status: An optional string representing the current status of the function.
+
+    - print_out: An optional boolean indicating whether to print the status
+      to the standard output. If set to `True`, the status will be printed
+      automatically; if `False`, the formatted status strings can be retrieved
+      and handled manually.
+
+    """
 
     def __init__(self,
-                 text: str,
-                 color: Optional[str] = None,
-                 bold: Optional[bool] = False,
-                 ) -> NoReturn:
+                 name: str,
+                 width: Optional[int] = None,
+                 style: Literal["line", "box"] = "line",
+                 status: Optional[str] = "PROCESSING",
+                 print_out: Optional[bool] = True):
 
-        self._color = color
-        self._text = text
-        self._bold = bold
+        self._name = name
+        self._status = status
+        self._width = width if width else shutil.get_terminal_size().columns
+        self._style = style
+        self._print = print_out
+        self._state = "not_opened" # "not_opened", "opened", "text_wrapped", "closed"
 
-    def __str__(self) -> str:
+    def __enter__(self):
+        if not self._print:
+            raise ValueError("FunctionStatus context manager requires the 'print_out' attribute to be set to True")
 
-        style_code = []
-        style_end = []
+        self.open
 
-        if self._bold:
-            style_code.append(self.STYLES["bold"])
-            style_end.append(self.END_STYLES["bold"])
+    def __exit__(self, exc_type, exc_value, exc_traceback):
 
-        if self._color:
-            style_code.append(self.COLORS.get(self._color, ""))
-            style_end.append(self.RESET_COLOR)
+        if exc_type:
+            error_message = traceback.format_tb(exc_traceback, limit = 2)
+            for line in error_message:
+                self.wrap(line)
+            self._status = "ERROR"
 
-        return ''.join(style_code) + self._text + ''.join(reversed(style_end))
+        elif self._status == "PROCESSING":
+            self._status = "SUCCESS"
 
-    def __add__(self, adding_str: str) -> str:
-        return self.__str__() + adding_str
+        self.close
+        return True
 
-    def __len__(self) -> int:
-        return len(self._text)
+    @property
+    def open(self) -> str:
 
-class StatusGenarator:
+        if self._state != "not_opened":
+            raise RuntimeError("Object can't be opened again without closing.")
 
-    STATUS = Literal["EXIT", "SUCCESS", "ABORTED", "ERROR"]
-    STYLE = Literal["line", "box"]
+        self._state = "opened"
 
-    def __init__(self, name: str, width: int, colorize: bool = True, style: STYLE = "line"):
+        if self._style == "line":
+            current_status = self._simple_line() + "\r"
+        else:
+            current_status = self._box_opening() + "\n" + self._box_closing() + "\r"
 
-        self.name = name
-        self.width = width if width else shutil.get_terminal_size().columns
-        self.generator = self.line() if style == "line" else self.box()
-        self.colorize = colorize
-        self.status = "PROCESSING"
+        if self._print:
+            sys.stdout.write(current_status)
 
-    def __call__(self, text = None):
+        return current_status
+
+    def wrap(self, text):
+
+        if self._state not in ["opened", "wrapping"]:
+            raise RuntimeError("Object needs to be opened before wrapping.")
+
+        self._state = "wrapping"
+
+        current_status = ""
+
+        if self._style == "line":
+            self._style = "box"
+            current_status += self._box_opening() + "\n"
+
+        current_status += self._box_wrap(text) + "\n" + self._box_closing() + "\r"
+
+        if self._print:
+            sys.stdout.write(current_status)
+
+        return current_status
+
+    @property
+    def close(self):
+
+        if self._state not in ["opened", "wrapping"]:
+            raise RuntimeError("Object can't be closed without being opened.")
+
+        self._state = "closed"
+
+        current_status = self._simple_line() + "\n" if self._style == "line" else self._box_closing() + "\n"
+
+        if self._print:
+            sys.stdout.write(current_status)
+
+        return current_status
+
+
+    def set_status(self, new_status: str) -> NoReturn:
+        self._status = new_status
+
+
+    def _simple_line(self) -> str:
 
         '''
-        comparing self.genarator.__name__ == "line_style" raises no error,
-        but according python documantation and gpt, generators has no __name__ arrt.
-        so I change it to gi_code.co_name, to make sure,
-        that comparing is working on any device
+        dots amaount:
+        2 spaces around dots +
+        2 spaces in brackets +
+        brackets around status = 6
         '''
-        try:
-            # simple line
-            if not text and self.generator.gi_code.co_name == "line":
-                return next(self.generator)
+        error_line = "It's too tight, sempai"
+        base_string = "\r{name} {dots} [ {status} ]"
+        dots_amount = self._width - len(self._name) - len(self._status) - 6
+        line = base_string.format(
+            name = self._name,
+            dots = "." * dots_amount,
+            status = self._status)
 
-            # close the line generator and change style to box
-            elif text and self.generator.gi_code.co_name == "line":
-                self.generator.close()
-                self.generator = self.box()
-                box_top = next(self.generator)
-                box_inner = self.generator.send(text)
-                return box_top + box_inner
+        return line if dots_amount > 5 else error_line
 
-            # process box
+
+    def _box_opening(self) -> str:
+        base_line = "\r┌ {name} {dashes}┐"
+        dashes_amount = self._width - len(self._name) - 4
+        line = base_line.format(
+            name = self._name,
+            dashes = "─" * dashes_amount)
+        return line
+
+
+    def _box_closing(self) -> str:
+        base_line = "\r└{dashes} [ {status} ] ┘"
+        dashes_amount = self._width - len(self._status) - 8
+        line = base_line.format(
+            status = self._status,
+            dashes = '─' * dashes_amount)
+        return line
+
+
+    def _box_wrap(self, text) -> str:
+
+        boxed_lines = []
+        lines = text.splitlines()
+        boxed_space = self._width - 4
+
+        for line in lines:
+
+            if not line.strip():
+                boxed_lines.append(f"│ {''.ljust(boxed_space)} │")
+
             else:
-                return self.generator.send(text)
+                wrapped_text = textwrap.fill(line, boxed_space)
 
-        except Exception as e:
-            message = "error call of the status geneator class"
-            print(message, e, file = sys.stderr)
+                for wrapped_line in wrapped_text.splitlines():
+                    boxed_lines.append(f"│ {wrapped_line.ljust(boxed_space)} │")
 
-    @property
-    def print(self):
-        return self
-
-    @property
-    def function_status(self):
-        return self.status
-
-    @function_status.setter
-    def function_status(self, new_status: STATUS):
-        self.status = self.colorize_status(new_status) if self.colorize else new_status
-
-    @staticmethod
-    def colorize_status(colorizing_status):
-
-        if colorizing_status == "EXIT":
-            return Colorize(text = "EXIT", color = "red", bold = True)
-
-        elif colorizing_status == "ERROR":
-            return Colorize(text = "ERROR", color = "red")
-
-        elif colorizing_status == "SUCCESS":
-            return Colorize(text = "SUCCESS", color = "green")
-
-        elif colorizing_status == "ABORTED":
-            return Colorize(text = "ABORTED", color = "yellow")
+        return "\r" + "\n".join(boxed_lines)
 
 
-    def line(self) -> str:
 
-        def create_line():
-            '''
-            dots amaount:
-            2 spaces around dots +
-            2 spaces in brackets +
-            2 spaces around whole line +
-            brackets around status = 8
-            '''
-            error_line = "It's too tight, sempai"
-            base_string = "\r {name} {dots} [ {status} ] "
-            dots_amount = self.width - len(self.name) - len(self.status) - 8
-            line = base_string.format(
-                name = self.name,
-                dots = "." * dots_amount,
-                status = self.status)
 
-            return line if dots_amount > 5 else error_line
-
-        yield create_line() + "\r"
-
-        yield create_line() + "\n"
-
-    def box(self) -> str:
-
-        '''
-        returns opening line + closing line (with processing status and carriage return),
-        then boxed text + closing box (same as before) while the generator getting text
-        and at the end closing line, but now the status must be changed and the line it will be without carriage return
-        '''
-        def get_opening_line():
-            base_string = "\r┌ {name} {dashes}┐\n"
-            dashes_amount = self.width - len(self.name) - 4
-            line = base_string.format(
-                name = self.name,
-                dashes = "─" * dashes_amount)
-            return line
-
-        def get_closing_line():
-            base_string = "\r└{dashes} [ {status} ] ┘"
-            dashes_amount = self.width - len(self.status) - 8
-            line = base_string.format(
-                status = self.status,
-                dashes = '─' * dashes_amount)
-            line = line + "\r" if self.status == "PROCESSING" else line + "\n"
-
-            return line
-
-        def get_boxed_text(text) -> List[str]:
-
-            boxed_lines = []
-            lines = text.splitlines()
-            boxed_space = self.width - 4
-
-            for line in lines:
-
-                if not line.strip():
-                    boxed_lines.append(f"│ {''.ljust(boxed_space)} │")
-
-                else:
-                    wrapped_text = textwrap.fill(line, boxed_space)
-
-                    for wrapped_line in wrapped_text.splitlines():
-                        boxed_lines.append(f"│ {wrapped_line.ljust(boxed_space)} │")
-
-            boxed_lines.append(get_closing_line())
-
-            return "\n".join(boxed_lines)
-
-        text = yield get_opening_line() + get_closing_line()
-
-        while text is not None:
-
-            text = yield get_boxed_text(text)
-
-        yield get_closing_line()
 
 
 def function_status(name: Optional[str] = None,
@@ -223,6 +230,49 @@ def function_status(name: Optional[str] = None,
                     catch_interruption: Optional[bool] = False,
                     catch_exceptions: Optional[bool] = False,
                     colorize: Optional[bool] = True):
+
+    """
+    A decorator that wraps a function to provide a real-time visual status of its execution.
+
+    This decorator captures the standard output (stdout) of the decorated function and
+    displays its execution status using the `FunctionStatus` class. It visually
+    represents the function's progress, providing real-time feedback to users about ongoing operations.
+
+    Utilizing threading, the decorator ensures that the decorated function runs without interruption,
+    while concurrently updating its status. This is especially beneficial for long-running functions where
+    real-time feedback is crucial.
+
+    The decorator also redirects the stdout of the function. Hence, any print statements or other outputs
+    from the function will be encapsulated and displayed within the status visualization class.
+
+    Parameters:
+
+    - name (str, optional): Specifies the name of the function. Defaults to the decorated function's name.
+
+    - width (int, optional): Sets the width of the status display. By default, it adjusts to the terminal's width.
+
+    - catch_interruption (bool, optional): Determines if the decorator should catch and handle keyboard
+      interruptions (KeyboardInterrupt). Defaults to False.
+
+    - catch_exceptions (bool, optional): Determines if the decorator should catch and display general exceptions
+      without halting the program. Defaults to False.
+
+    - colorize (bool, optional): If set to True, the status messages will be colorized for better visual feedback.
+      Defaults to True.
+
+    Returns:
+    - Callable: The decorated function, wrapped with real-time status visualization.
+
+    Example:
+    @function_status(name="Processing Data", width=50)
+    def process_data():
+        # function logic here
+        ...
+    """
+    ...
+
+
+
 
     def first_layer(func):
 
@@ -232,75 +282,88 @@ def function_status(name: Optional[str] = None,
 
             name = name if name else func.__name__
 
+            main_function_processing = True
+            func_result = None
+            error_message = None
+
+            def checking_thread():
+                while main_function_processing:
+                    check_prints()
+                    time.sleep(0.1)
+
             def check_prints():
                 text = buffer.getvalue()
                 if text:
                     buffer.truncate(0)
                     buffer.seek(0)
-                    wrapped_text = current_status(text)
+                    wrapped_text = current_status.wrap(text)
                     original_stdout.write(wrapped_text)
 
-            current_status = StatusGenarator(name, width)
+            current_status = FunctionStatus(name = name, width = width, print_out = False)
 
             # Catching text output stream
             original_stdout = sys.stdout
             sys.stdout = buffer = StringIO()
 
-            with ThreadPoolExecutor(max_workers = 1) as executor:
+            original_stdout.write(current_status.open)
 
-                original_stdout.write(current_status())
-
-                future = executor.submit(func, *args, **kwargs)
-                while not future.done():
-                    time.sleep(0.1)
-                    check_prints()
+            thread = Thread(target = checking_thread)
+            thread.start()
 
             try:
-                result = future.result()
-                check_prints()
-                current_status.function_status = "SUCCESS"
-                original_stdout.write(current_status())
-                return result
 
-            except SystemExit:
+                func_result = func(*args, **kwargs)
+                new_status = Colorize(text = "SUCCESS", color = "green") if colorize else "SUCCESS"
+                current_status.set_status(new_status)
 
-                check_prints()
+            except SystemExit as e:
 
-                current_status.function_status = "EXIT"
-                original_stdout.write(current_status())
+                new_status = Colorize(text = "EXIT", color = "red", bold = True) if colorize else "EXIT"
+                current_status.set_status(new_status)
 
+                if str(e):
+                    error_message = str(e)
                 raise
 
-            except KeyboardInterrupt:
+            except KeyboardInterrupt as e:
 
-                check_prints()
+                new_status = Colorize(text = "ABORTED", color = "yellow") if colorize else "ABORTED"
+                current_status.set_status(new_status)
 
-                current_status.function_status = "ABORTED"
-                original_stdout.write(current_status())
+                if str(e) != "KeyboardInterrupt":
+                    error_message = str(e)
 
                 if not catch_interruption:
-                    raise
+                    raise e from e
 
             except Exception as e:
 
-                check_prints()
-
-                current_status.function_status = "ERROR"
+                new_status = Colorize(text = "ERROR", color = "red") if colorize else "ERROR"
+                current_status.set_status(new_status)
 
                 if not catch_exceptions:
-                    original_stdout.write(current_status())
                     raise e from e
 
                 else:
-                    original_stdout.write(current_status(e))
-                    original_stdout.write(current_status())
+                    error_message = traceback.format_exc(limit = -1)
 
             finally:
 
+                main_function_processing = False
+                thread.join()
+                check_prints()
+
+                if error_message:
+                    error_message = current_status.wrap(error_message)
+                    original_stdout.write(error_message)
+
+                original_stdout.write(current_status.close)
                 # restoring text current_status stream
                 sys.stdout = original_stdout
                 buffer.close()
                 del(current_status)
+
+            return func_result
 
         return second_layer
 
@@ -313,84 +376,83 @@ def function_status(name: Optional[str] = None,
 
 if __name__ == "__main__":
 
-    # 1. Basic test
-    @function_status(name="Line Test")
+    @function_status(name = "Basic line test")
     def line_text():
-        return "returned from line test."
+        pass
 
-    print(line_text())
+    line_text()
 
-    # 2. Basic test with inside print
-    @function_status(name="Basic Test")
-    def basic_function():
-        print("Inside basic function.")
-        return "Good!"
+    @function_status()
+    def no_arguments_test():
+        pass
 
-    print(basic_function())
+    no_arguments_test()
 
-    # 3. Text formatting and multiple prints
-    @function_status(name="Text Formatting Test")
-    def formatting_function():
+    @function_status(name = "Line error test")
+    def error_in_line():
+        1/0
+
+    try:
+        error_in_line()
+    except ZeroDivisionError as e:
+        pass
+
+    @function_status(name = "Catching error test", catch_exceptions = True)
+    def error_in_box():
+        print("Here must be this line, empty line, traceback for zero devision error", end = "\n\n")
+        1/0
+
+    error_in_box()
+
+    @function_status(name = "Text formatting test")
+    def formatting_test():
         print("Testing multiple lines of text\n" * 3)
         print("\tTesting tab character.")
         print("Testing \tsplit tab characters.")
         print("Testing carriage return: ABC\rXYZ")
         print("Mixing\ttabs and\nnewlines.")
-        return "Done with formatting tests!"
 
-    print(formatting_function())
+    formatting_test()
 
-    # 4. Long text test
-    @function_status(name="Long Text Test")
-    def long_text_function():
-        for i in range(10):
-            print(f"This is a long line of text number {i}. " * 3)
+    @function_status(name = "Long Text Test")
+    def long_text_test():
+        for i in range(5):
+            print(f"This is a long line of text number {i}. " * 10)
             time.sleep(0.2)
-        return "Long text test completed!"
 
-    print(long_text_function())
+    long_text_test()
 
-    # 5. Function simulating a KeyboardInterrupt
-    @function_status(name="Interrupt Test", catch_interruption=True, catch_exceptions=False)
-    def interrupt_function():
+    @function_status(name = "Interrupt Test", catch_interruption = True)
+    def interruption_test():
         print("Simulating a keyboard interrupt...")
         raise KeyboardInterrupt
 
-    try:
-        interrupt_function()
-    except KeyboardInterrupt:
-        print("Caught KeyboardInterrupt in interrupt_function!")
+    interruption_test()
 
-    # 6. Printing special characters
-    @function_status(name="Special Characters Test")
-    def special_characters_function():
-        special_chars = '!@#$%^&*()_+-=[]{}|;:,.<>?/`~"\'\\'
-        print(f"Testing special characters: {special_chars}")
-        return "Special characters test completed!"
+    @function_status(name = "Custom width line test", width = 60)
+    def custom_width_line():
+        pass
 
-    print(special_characters_function())
+    custom_width_line()
 
-    # 7. Function that waits and prints intermittently
-    @function_status(name="Intermittent Print Test", width=79)
-    def intermittent_print():
+    @function_status(name = "Custom wifth box test", width = 60)
+    def custom_width_box():
         for i in range(5):
             print(f"Intermittent print {i}")
             time.sleep(0.5)
 
-    intermittent_print()
+    custom_width_box()
 
-    # 8. Testing custom width of the status line
-    @function_status(name="Custom Width Test", width=60)
-    def custom_width_function():
-        print("Testing a custom width for the status line.")
-        time.sleep(1)
+    @function_status(name = "INTERRUPT ME", catch_interruption = True)
+    def long_function():
+        time.sleep(10)
+        print("text")
 
-    custom_width_function()
+    long_function()
 
-    # 9. Function printing output and then raising an error
-    @function_status(name="Print & Raise Error Test")
+    @function_status(name = "Print & SystemExit")
     def print_and_raise_error_function():
-        print("This function will print this line and then raise an systemexit.")
+        print("This function is printing this text and then raise the systemexit error")
         raise SystemExit
 
     print_and_raise_error_function()
