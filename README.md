@@ -2,6 +2,13 @@
 # Decorations Library
 Elevate your Python development experience with a collection of decorators and utilities tailored for improved visibility and presentation in the terminal.
 
+## Table of Contents
+- [Installation](#installation)
+- [Overview](#overview)
+- [Function Status](#function-status)
+- [Colorize](#colorize)
+- [License](#license)
+  
 ## Installation
 To use the decorators library, clone the repository:
 
@@ -11,53 +18,70 @@ cd decorations
 echo "export PYTHONPATH=\$PYTHONPATH:$(pwd)" >> ~/.bashrc
 source ~/.bashrc
 ```
-Then, you can import and utilize the modules in your Python scripts.
 
-> **Note:** only standard python modules are used, so for the time being, adding to pip is not planned, and conflict with other libraries is impossible
+> **Note**: The library relies solely on standard Python modules, ensuring no conflicts with other libraries.
 
-## Features
+## Overview
 
-### Function Status Decorator
-Monitor the real-time execution of your functions in the terminal, including captured print statements and exception tracebacks.
+### Function Status
+- Get a real-time visual representation of your function's execution, including captured print statements and exceptions.
+- Use manually, with a context manager, or as a decorator for flexibility.
 
-### Colorize Class
-Beautify your terminal outputs with a plethora of color options.
+### Colorize
+- Add a splash of color to your terminal outputs.
+- Choose from a range of colors, backgrounds, and styles.
 
-## Usage
 
-### Function Status Decorator
-Decorate your functions to receive feedback:
-> **Note:** The decorator intercepts sys.stdout. Any alterations to sys.stdout within the decorated function might disrupt both the function and decorator's logic.
+## Function Status 
+
+#### Manual Usage:
 
 ```python
-@function_status(name="Line Test")
-def line_text():
-    return "returned from line test."
+from decorations import FunctionStatus
 
-print(line_text())
-
-@function_status(name="Basic Test")
-def basic_function():
-    print("Inside basic function.")
-    return "Good!"
-
-print(basic_function())
-
-@function_status(name="Text Formatting Test")
-def formatting_function():
-    print("Testing multiple lines of text\n" * 3)
-    print("\tTesting tab character.")
-    print("Testing \tsplit tab characters.")
-    print("Testing carriage return: ABC\rXYZ")
-    print("Mixing\ttabs and\nnewlines.")
-    return "Done with formatting tests!"
-
+status = FunctionStatus(name="My Function", print_out = False)
+line = status.open
+print(line, end="")
+# Your function logic here
+line = status.wrap("first stage")
+print(line, end="")
+# More logic
+line = status.close
+print(line, end="")
 ```
-![output](https://github.com/signifex/decorations/assets/97762325/1463251e-9543-4969-83b0-96e6a01f69e4)
-![image](https://github.com/signifex/decorations/assets/97762325/e6b1ddc0-01ed-4e80-93df-fcb7bb82eab8)
 
+#### Context Manager:
 
-> **Note:** Result from running the module on its own, contains a number of test functions to check the output
+```python
+from decorations import FunctionStatus
+
+status = FunctionStatus(name="My Function", print_out = True)
+with status:
+    # Your function logic here
+    status.wrap("Processing ...")
+    # More logic
+```
+
+#### Decorator:
+
+```python
+from decorations import function_status
+
+@function_status(name="Decorated Function")
+def my_function():
+    # Your function logic here
+    ...
+```
+<details>
+  <summary>Animated output</summary>
+    <img src="https://github.com/signifex/decorations/assets/97762325/1463251e-9543-4969-83b0-96e6a01f69e4" alt="output">
+</details>
+
+<details>
+  <summary>Image output</summary>
+    <img src="https://github.com/signifex/decorations/assets/97762325/e6b1ddc0-01ed-4e80-93df-fcb7bb82eab8" alt="image">
+</details>
+
 
 #### Parameters:
 - **name**: (Optional) Custom display name for the terminal. Defaults to the function's name.
@@ -65,9 +89,11 @@ def formatting_function():
 - **catch_interruption**: (Optional) Set True to handle KeyboardInterrupt gracefully, default is False.
 - **catch_exceptions**: (Optional) Set True to catch exceptions other than KeyboardInterrupt and SystemExit, default is False.
 
-### How it Works:
+<details>
+  <summary>How it Works</summary>
+  
 #### Threaded Execution:
-The decorated function runs inside a separate thread using Python's ThreadPoolExecutor. This allows for concurrent monitoring of the function's execution.
+The decorated function runs inside a separate thread using Python's Threading. This allows for concurrent monitoring of the function's execution.
 #### Capturing Standard Output:
 The module captures the standard output (sys.stdout) of the decorated function. This means any print statements or standard output produced by the function is intercepted.
 The captured output can then be formatted, decorated, or manipulated as desired before being displayed to the terminal.
@@ -82,10 +108,10 @@ Depending on the configuration, certain exceptions can either be caught and proc
 Users can customize the name and width of the status display.
 Additional options allow users to specify whether interruptions (KeyboardInterrupt) or general exceptions should be caught by the decorator.
 
-### Colorize Class
-Elevate your terminal outputs with vibrant colors and styles using the Colorize class.
+</details>
 
-#### Overview:
+
+## Colorize
 The Colorize class leverages ANSI escape codes to offer a variety of text colors, backgrounds, and styles. Whether you need to highlight specific outputs or make your logs more visually appealing, Colorize has got you covered.
 
 #### Features:
@@ -95,21 +121,26 @@ The Colorize class leverages ANSI escape codes to offer a variety of text colors
 - **Easy access**: using a chain of methods, it's easier to create an object of the class. (Use the `bg_` prefix to access background colors as class method e.g., `bg_red`, `bg_blue`).
 - **Quick print**: Instead of wrapping the object, just use classmethod `print`
 
-#### Usage:
-The Colorize class offers flexibility in applying styles:
+
+#### Basic Usage:
 
 ```python
-# Initialization Styles, great readability but awkward writing:
-colored_text = Colorize("Hello", color="red", background="blue", bold=True)
+from decorations import Colorize
 
-# Chained Styles: using class methods for faster writing:
-Colorize("Hello").red.bg_blue.bold
+colored_text = Colorize("Hello World!", color = "red", bold = True)
+print(colored_text)
+```
 
-# And the final print method to awoid wrapping in a standard function
-Colorize("Hello").yellow.bg_red.underline.print
+#### Chain Styles:
 
-# Extract Raw Text: Retrieve the original text without any styles.
-colored_text.raw
+```python
+from decorations import Colorize
+
+Colorize("Hello World!").yellow.bg_red.underline.print
 ```
 
 > **Note:** The class is designed to be forgiving. Any unrecognized color or background specifications won't raise an error but will simply be ignored. Background colors can be accessed using the `bg_` prefix, making it slightly different from regular colors in terms of easy access.
+
+
+## License
+BSD 2-Clause License
