@@ -12,6 +12,66 @@ from decorations import Colorize
 
 class FunctionStatus:
 
+    """
+    Represents the status of a function's execution and provides visualization tools.
+
+    The `FunctionStatus` class offers multiple ways to visualize or track the status
+    of a function's execution:
+
+    1. **Manual Usage**: For maximum customization, you can use the class directly
+    and call the methods in sequence:
+
+       - open: To open the status. Returns the formatted string.
+       - wrap: To wrap text inside the status. Returns the wrapped text as a string.
+       - close: To close the status. Returns the closed status string.
+
+    These methods return formatted strings, which can be particularly useful when
+    `print_out` is set to `False`, allowing manual handling and printing of the strings.
+
+       Example:
+
+       fs = FunctionStatus(name="Test")
+       status_open = fs.open
+       wrapped_text = fs.wrap("Function started...")
+       status_close = fs.close
+
+    2. **Context Manager**: For simplicity with limited customization, you can use
+       the class within a `with` statement. This ensures the correct order of operations
+       (`open`, `wrap`, `close`):
+
+       Example:
+
+       fs = FunctionStatus(name="Test")
+       with fs:
+           fs.wrap("Processing...")
+
+    3. **Decorator**: The decorator provides a way to wrap entire functions and capture
+       their stdout. It uses threading to maintain responsiveness and automatically
+       manages the opening, wrapping, and closing of the status:
+
+       @function_status(name = "some function")
+       def some_function():
+           pass
+
+    Attributes:
+
+    - name: A string representing the name of the function.
+
+    - width: An optional integer specifying the width of the status display.
+      If not provided, the default width is set to the width of the terminal.
+
+    - style: A string that can be either "line" or "box", determining the
+      style of the status display.
+
+    - status: An optional string representing the current status of the function.
+
+    - print_out: An optional boolean indicating whether to print the status
+      to the standard output. If set to `True`, the status will be printed
+      automatically; if `False`, the formatted status strings can be retrieved
+      and handled manually.
+
+    """
+
     def __init__(self,
                  name: str,
                  width: Optional[int] = None,
@@ -25,6 +85,26 @@ class FunctionStatus:
         self._style = style
         self._print = print_out
         self._state = "not_opened" # "not_opened", "opened", "text_wrapped", "closed"
+
+    def __enter__(self):
+        if not self._print:
+            raise ValueError("FunctionStatus context manager requires the 'print_out' attribute to be set to True")
+
+        self.open
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+
+        if exc_type:
+            error_message = traceback.format_tb(exc_traceback, limit = 2)
+            for line in error_message:
+                self.wrap(line)
+            self._status = "ERROR"
+
+        elif self._status == "PROCESSING":
+            self._status = "SUCCESS"
+
+        self.close
+        return True
 
     @property
     def open(self) -> str:
@@ -79,8 +159,10 @@ class FunctionStatus:
 
         return current_status
 
+
     def set_status(self, new_status: str) -> NoReturn:
         self._status = new_status
+
 
     def _simple_line(self) -> str:
 
@@ -148,6 +230,49 @@ def function_status(name: Optional[str] = None,
                     catch_interruption: Optional[bool] = False,
                     catch_exceptions: Optional[bool] = False,
                     colorize: Optional[bool] = True):
+
+    """
+    A decorator that wraps a function to provide a real-time visual status of its execution.
+
+    This decorator captures the standard output (stdout) of the decorated function and
+    displays its execution status using the `FunctionStatus` class. It visually
+    represents the function's progress, providing real-time feedback to users about ongoing operations.
+
+    Utilizing threading, the decorator ensures that the decorated function runs without interruption,
+    while concurrently updating its status. This is especially beneficial for long-running functions where
+    real-time feedback is crucial.
+
+    The decorator also redirects the stdout of the function. Hence, any print statements or other outputs
+    from the function will be encapsulated and displayed within the status visualization class.
+
+    Parameters:
+
+    - name (str, optional): Specifies the name of the function. Defaults to the decorated function's name.
+
+    - width (int, optional): Sets the width of the status display. By default, it adjusts to the terminal's width.
+
+    - catch_interruption (bool, optional): Determines if the decorator should catch and handle keyboard
+      interruptions (KeyboardInterrupt). Defaults to False.
+
+    - catch_exceptions (bool, optional): Determines if the decorator should catch and display general exceptions
+      without halting the program. Defaults to False.
+
+    - colorize (bool, optional): If set to True, the status messages will be colorized for better visual feedback.
+      Defaults to True.
+
+    Returns:
+    - Callable: The decorated function, wrapped with real-time status visualization.
+
+    Example:
+    @function_status(name="Processing Data", width=50)
+    def process_data():
+        # function logic here
+        ...
+    """
+    ...
+
+
+
 
     def first_layer(func):
 
